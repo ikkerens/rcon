@@ -1,4 +1,4 @@
-module github.com/ikkerens/gorcon
+module github.com/ikkerens/rcon
 
 go 1.12
 
