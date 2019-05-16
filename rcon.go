@@ -76,7 +76,6 @@ func (conn *Conn) Send(cmd string) (response string, err error) {
 	conn.lock.Unlock()
 
 	conn.sendLock.Lock()
-	defer conn.sendLock.Unlock()
 	msgId, err := c.Write(cmd)
 	if err != nil {
 		return "", err
@@ -88,8 +87,10 @@ func (conn *Conn) Send(cmd string) (response string, err error) {
 	t := time.After(5 * time.Second)
 	select {
 	case msg := <-ch:
+		defer conn.sendLock.Unlock()
 		return msg, nil
 	case <-t:
+		conn.sendLock.Unlock()
 		conn.invalidate()
 		return "", errors.New("timeout on receiving rcon message")
 	}
