@@ -79,14 +79,22 @@ func (conn *Conn) Send(cmd string) (response string, err error) {
 	defer conn.sendLock.Unlock()
 	msgId, err := conn.backing.Write(cmd)
 	if err != nil {
-		conn.lock.Unlock()
 		return "", err
 	}
 
 	ch := make(chan string, 1)
 	conn.pending[msgId] = ch
 
-	return <-ch, nil
+	t := time.After(5 * time.Second)
+	select {
+	case msg := <-ch:
+		return msg, nil
+	case <-t:
+		conn.lock.Lock()
+		delete(conn.pending, msgId)
+		conn.lock.Unlock()
+		return "", errors.New("timeout on receiving rcon message")
+	}
 }
 
 func (conn *Conn) reader() {
