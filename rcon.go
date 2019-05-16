@@ -90,9 +90,7 @@ func (conn *Conn) Send(cmd string) (response string, err error) {
 	case msg := <-ch:
 		return msg, nil
 	case <-t:
-		conn.lock.Lock()
-		delete(conn.pending, msgId)
-		conn.lock.Unlock()
+		conn.invalidate()
 		return "", errors.New("timeout on receiving rcon message")
 	}
 }
@@ -101,16 +99,7 @@ func (conn *Conn) reader() {
 	for {
 		msg, msgId, err := conn.backing.Read()
 		if err != nil {
-			conn.lock.Lock()
-			if !conn.closed {
-				conn.valid = false
-				if conn.backing != nil {
-					_ = conn.backing.Close()
-				}
-				conn.backing = nil
-				go conn.reconnect()
-			}
-			conn.lock.Unlock()
+			conn.invalidate()
 			return
 		}
 
@@ -120,6 +109,21 @@ func (conn *Conn) reader() {
 			delete(conn.pending, msgId)
 		}
 		conn.lock.Unlock()
+	}
+}
+
+func (conn *Conn) invalidate() {
+	conn.lock.Lock()
+	defer conn.lock.Unlock()
+
+	if !conn.closed {
+		conn.valid = false
+		conn.pending = make(map[int]chan string)
+		if conn.backing != nil {
+			_ = conn.backing.Close()
+		}
+		conn.backing = nil
+		go conn.reconnect()
 	}
 }
 
