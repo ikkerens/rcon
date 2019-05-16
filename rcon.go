@@ -16,7 +16,6 @@ type Conn struct {
 	sendLock sync.Mutex
 
 	backing *rcon.RemoteConsole
-	valid   bool
 	closed  bool
 }
 
@@ -45,7 +44,6 @@ func (conn *Conn) connect() error {
 	defer conn.lock.Unlock()
 
 	conn.backing = nc
-	conn.valid = true
 
 	return nil
 }
@@ -55,16 +53,18 @@ func (conn *Conn) Close() error {
 	defer conn.lock.Unlock()
 
 	conn.closed = true
-	conn.valid = false
 	if conn.backing != nil {
-		return conn.backing.Close()
+		oc := conn.backing
+		conn.backing = nil
+		return oc.Close()
 	}
 	return nil
 }
 
 func (conn *Conn) Send(cmd string) (response string, err error) {
 	conn.lock.Lock()
-	if conn.valid == false {
+	c := conn.backing
+	if c == nil {
 		if conn.closed {
 			conn.lock.Unlock()
 			return "", errors.New("no active rcon connection (closed)")
@@ -77,7 +77,7 @@ func (conn *Conn) Send(cmd string) (response string, err error) {
 
 	conn.sendLock.Lock()
 	defer conn.sendLock.Unlock()
-	msgId, err := conn.backing.Write(cmd)
+	msgId, err := c.Write(cmd)
 	if err != nil {
 		return "", err
 	}
@@ -117,12 +117,11 @@ func (conn *Conn) invalidate() {
 	defer conn.lock.Unlock()
 
 	if !conn.closed {
-		conn.valid = false
 		conn.pending = make(map[int]chan string)
 		if conn.backing != nil {
 			_ = conn.backing.Close()
+			conn.backing = nil
 		}
-		conn.backing = nil
 		go conn.reconnect()
 	}
 }
