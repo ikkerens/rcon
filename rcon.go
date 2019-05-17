@@ -29,7 +29,6 @@ func New(host, pass string) (*Conn, error) {
 	if err := r.connect(); err != nil {
 		return nil, err
 	}
-	go r.reader()
 
 	return r, nil
 }
@@ -44,6 +43,7 @@ func (conn *Conn) connect() error {
 	defer conn.lock.Unlock()
 
 	conn.backing = nc
+	go conn.reader()
 
 	return nil
 }
