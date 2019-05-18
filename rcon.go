@@ -117,12 +117,14 @@ func (conn *Conn) invalidate() {
 	conn.lock.Lock()
 	defer conn.lock.Unlock()
 
-	if !conn.closed {
-		conn.pending = make(map[int]chan string)
-		if conn.backing != nil {
-			_ = conn.backing.Close()
-			conn.backing = nil
-		}
+	if conn.closed {
+		return
+	}
+
+	conn.pending = make(map[int]chan string)
+	if conn.backing != nil {
+		_ = conn.backing.Close()
+		conn.backing = nil
 		go conn.reconnect()
 	}
 }
